@@ -1,4 +1,5 @@
-import { DataSource, DataSourceOptions } from 'typeorm';
+import type { DataSourceOptions } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { useDataSourceOptions } from './options';
 
 const instances : Record<string, DataSource> = {};
@@ -15,7 +16,7 @@ export function setDataSource(
     instances[alias] = dataSource;
 }
 
-export function isSetDataSource(alias?: string) : boolean {
+export function hasDataSource(alias?: string) : boolean {
     alias = alias || 'default';
 
     return Object.prototype.hasOwnProperty.call(instances, alias);
@@ -48,7 +49,9 @@ export async function useDataSource(alias?: string) : Promise<DataSource> {
             if (!Object.prototype.hasOwnProperty.call(initializePromises, alias)) {
                 initializePromises[alias] = instances[alias].initialize()
                     .catch((e) => {
-                        delete initializePromises[alias];
+                        if (alias) {
+                            delete initializePromises[alias];
+                        }
 
                         throw e;
                     });
@@ -64,7 +67,9 @@ export async function useDataSource(alias?: string) : Promise<DataSource> {
     if (!Object.prototype.hasOwnProperty.call(optionsPromises, alias)) {
         optionsPromises[alias] = useDataSourceOptions(alias)
             .catch((e) => {
-                delete optionsPromises[alias];
+                if (alias) {
+                    delete optionsPromises[alias];
+                }
 
                 throw e;
             });
@@ -78,7 +83,9 @@ export async function useDataSource(alias?: string) : Promise<DataSource> {
     if (!Object.prototype.hasOwnProperty.call(initializePromises, alias)) {
         initializePromises[alias] = dataSource.initialize()
             .catch((e) => {
-                delete initializePromises[alias];
+                if (alias) {
+                    delete initializePromises[alias];
+                }
 
                 throw e;
             });

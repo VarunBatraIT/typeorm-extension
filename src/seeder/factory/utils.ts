@@ -1,6 +1,6 @@
-import { EntitySchema, ObjectType } from 'typeorm';
+import type { EntitySchema, ObjectType } from 'typeorm';
 import { SeederFactoryManager } from './manager';
-import { FactoryCallback, SeederFactoryConfig } from './type';
+import type { FactoryCallback, SeederFactoryConfig } from './type';
 
 let instance : SeederFactoryManager | undefined;
 
@@ -14,9 +14,9 @@ export function useSeederFactoryManager() {
     return instance;
 }
 
-export function setSeederFactory<O extends Record<string, any>>(
+export function setSeederFactory<O extends Record<string, any>, Meta = unknown>(
     entity: ObjectType<O> | EntitySchema<O>,
-    factoryFn: FactoryCallback<O>,
+    factoryFn: FactoryCallback<O, Meta>,
 ) : SeederFactoryConfig {
     const manager = useSeederFactoryManager();
     return manager.set(entity, factoryFn);

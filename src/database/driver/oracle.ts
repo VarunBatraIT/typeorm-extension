@@ -1,8 +1,9 @@
-import { OracleDriver } from 'typeorm/driver/oracle/OracleDriver';
-import { DatabaseCreateContext, DatabaseDropContext } from '../type';
-import { DriverOptions } from './type';
+import type { OracleDriver } from 'typeorm/driver/oracle/OracleDriver';
+import { OptionsError } from '../../errors';
+import type { DatabaseCreateContext, DatabaseDropContext } from '../type';
+import type { DriverOptions } from './type';
 import { buildDriverOptions, createDriver } from './utils';
-import { buildDatabaseCreateContext, synchronizeDatabase } from '../utils';
+import { buildDatabaseCreateContext, setupDatabaseSchema } from '../utils';
 
 export function createSimpleOracleConnection(
     driver: OracleDriver,
@@ -46,6 +47,9 @@ export async function createOracleDatabase(
     context?: DatabaseCreateContext,
 ) {
     context = await buildDatabaseCreateContext(context);
+    if (!context.options) {
+        throw OptionsError.undeterminable();
+    }
 
     const options = buildDriverOptions(context.options);
     const driver = createDriver(context.options) as OracleDriver;
@@ -59,14 +63,14 @@ export async function createOracleDatabase(
     const result = await connection.execute(query);
 
     if (context.synchronize) {
-        await synchronizeDatabase(context.options);
+        await setupDatabaseSchema(context.options);
     }
 
     return result;
 }
 
 export async function dropOracleDatabase(
-    context?: DatabaseDropContext,
+    _context?: DatabaseDropContext,
 ) {
     /**
      * @link https://github.com/typeorm/typeorm/blob/master/src/driver/oracle/OracleQueryRunner.ts#L295

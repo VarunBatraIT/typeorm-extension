@@ -1,9 +1,7 @@
 import {dataSource} from "../../data/typeorm/data-source";
 import {
-    isSetDataSource,
-    isSetDataSourceOptions,
+    hasDataSource,
     setDataSource,
-    setDataSourceOptions,
     unsetDataSource,
     useDataSource
 } from "../../../src";
@@ -12,7 +10,7 @@ describe('src/data-source/singleton.ts', () => {
     it('should set and use datasource', async () => {
         setDataSource(dataSource);
 
-        expect(isSetDataSource()).toBeTruthy();
+        expect(hasDataSource()).toBeTruthy();
 
         let instance = await useDataSource();
         expect(instance).toEqual(dataSource);
@@ -21,33 +19,21 @@ describe('src/data-source/singleton.ts', () => {
         expect(instance).toEqual(dataSource);
 
         unsetDataSource();
-        expect(isSetDataSource()).toBeFalsy();
+        expect(hasDataSource()).toBeFalsy();
     });
 
     it('should set and use data-source with alias', async () => {
-        expect(isSetDataSource('foo')).toBeFalsy();
+        expect(hasDataSource('foo')).toBeFalsy();
 
         setDataSource(dataSource, 'foo');
 
-        expect(isSetDataSource()).toBeFalsy();
-        expect(isSetDataSource('foo')).toBeTruthy();
+        expect(hasDataSource()).toBeFalsy();
+        expect(hasDataSource('foo')).toBeTruthy();
 
         const instance = await useDataSource('foo');
         expect(instance).toEqual(dataSource);
 
         unsetDataSource('foo');
-        expect(isSetDataSource('foo')).toBeFalsy();
-    })
-
-    it('should set and use data-source options', async () => {
-        setDataSourceOptions(dataSource.options);
-
-        expect(isSetDataSourceOptions()).toBeTruthy();
-        expect(isSetDataSource()).toBeFalsy();
-
-        const instance = await useDataSource();
-        expect(instance.options).toEqual(dataSource.options);
-
-        unsetDataSource();
+        expect(hasDataSource('foo')).toBeFalsy();
     })
 })

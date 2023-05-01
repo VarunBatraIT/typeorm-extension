@@ -1,9 +1,10 @@
 import path from "path";
 import {
-    buildLegacyDataSourceOptions
+    buildLegacyDataSourceOptions,
 } from "../../../src";
 import {buildDriverOptions} from "../../../src";
-import {getCharsetFromDataSourceOptions} from "../../../src/database/driver/utils/charset";
+import {getCharsetFromDataSourceOptions} from "../../../src";
+import {checkTestDatabase, destroyTestDatabase} from "../../data/typeorm/utils";
 
 describe('src/database/module.ts', () => {
     const rootPath : string = path.resolve(process.cwd(), 'test/data/typeorm');
@@ -23,7 +24,9 @@ describe('src/database/module.ts', () => {
         expect(driverOptions.password).toEqual('admin');
         expect(driverOptions.database).toEqual('test');
         expect(driverOptions.extra).toBeDefined();
-        expect(driverOptions.extra.socketPath).toEqual('/var/mysqld/mysqld.sock');
+        if(driverOptions.extra) {
+            expect(driverOptions.extra.socketPath).toEqual('/var/mysqld/mysqld.sock');
+        }
         expect(driverOptions.port).toEqual(3306);
         expect(driverOptions.charset).toEqual('UTF8_GENERAL_CI');
     });
@@ -38,5 +41,15 @@ describe('src/database/module.ts', () => {
 
         const charset = getCharsetFromDataSourceOptions(connectionOptions);
         expect(charset).toEqual('UTF8_GENERAL_CI');
+    })
+
+    it('should check database',  async () => {
+        let check = await checkTestDatabase();
+
+        expect(check).toBeDefined();
+        // special case, only for sqlite/file driver
+        expect(check.exists).toBeTruthy();
+
+        await destroyTestDatabase();
     })
 })

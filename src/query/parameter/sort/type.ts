@@ -1,9 +1,7 @@
-import { SortParseOptions, SortParseOutput } from '@trapi/query';
+import type { SortParseOptions, SortParseOutput } from 'rapiq';
+import type { ObjectLiteral } from 'typeorm';
 
-export type SortApplyOptions = SortParseOptions;
-export type SortApplyOutput = SortParseOutput;
-
-export {
-    SortParseOptions,
-    SortParseOutput,
+export type QuerySortApplyOptions<T extends ObjectLiteral = ObjectLiteral> = SortParseOptions<T> & {
+    defaultAlias?: string
 };
+export type QuerySortApplyOutput = SortParseOutput;

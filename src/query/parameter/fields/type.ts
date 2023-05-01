@@ -1,9 +1,9 @@
-import { FieldsParseOptions, FieldsParseOutput } from '@trapi/query';
+import type { FieldsParseOptions, FieldsParseOutput } from 'rapiq';
+import type { ObjectLiteral } from 'typeorm';
 
-export type FieldsApplyOptions = FieldsParseOptions;
-export type FieldsApplyOutput = FieldsParseOutput;
-
-export {
-    FieldsParseOptions,
-    FieldsParseOutput,
-};
+export type QueryFieldsApplyOptions<
+    T extends ObjectLiteral = ObjectLiteral,
+    > = FieldsParseOptions<T> & {
+        defaultAlias?: string
+    };
+export type QueryFieldsApplyOutput = FieldsParseOutput;

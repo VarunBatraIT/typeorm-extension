@@ -1,24 +1,19 @@
-import { FiltersParseOptions, FiltersParseOutput } from '@trapi/query';
+import type { FiltersParseOptions, FiltersParseOutput } from 'rapiq';
+import type { ObjectLiteral } from 'typeorm';
 
-export type FiltersApplyOptions = FiltersParseOptions & {
-    transform?: FiltersTransformOptions
-};
+export type QueryFiltersApplyOptions<
+    T extends ObjectLiteral = ObjectLiteral,
+    > = FiltersParseOptions<T> & {
+        bindingKey?: (key: string) => string,
+        defaultAlias?: string
+    };
 
-export type FiltersApplyOutput = FiltersParseOutput;
-
-export {
-    FiltersParseOptions,
-    FiltersParseOutput,
-};
+export type QueryFiltersApplyOutput = FiltersParseOutput;
 
 // -----------------------------------------
 
-export type FiltersTransformOptions = {
-    bindingKeyFn?: (key: string) => string,
-};
-
-export type FilterTransformOutputElement = {
+export type QueryFiltersOutputElement = {
     statement: string,
     binding: Record<string, any>
 };
-export type FiltersTransformOutput = FilterTransformOutputElement[];
+export type QueryFiltersOutput = QueryFiltersOutputElement[];

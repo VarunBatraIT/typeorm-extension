@@ -1,10 +1,10 @@
 import {
-    FieldOperator,
     parseQueryFields,
-} from '@trapi/query';
+} from 'rapiq';
 
-import { SelectQueryBuilder } from 'typeorm';
-import { FieldsApplyOptions, FieldsApplyOutput } from './type';
+import type { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
+import { buildKeyWithPrefix, getAliasForPath } from '../../utils';
+import type { QueryFieldsApplyOptions, QueryFieldsApplyOutput } from './type';
 
 /**
  * Apply parsed fields parameter data on the db query.
@@ -13,29 +13,22 @@ import { FieldsApplyOptions, FieldsApplyOutput } from './type';
  * @param data
  */
 /* istanbul ignore next */
-export function applyQueryFieldsParseOutput<T>(
+export function applyQueryFieldsParseOutput<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
-    data: FieldsApplyOutput,
+    data: QueryFieldsApplyOutput,
+    options: QueryFieldsApplyOptions<T> = {},
 ) {
     if (data.length === 0) {
         return data;
     }
-    for (let i = 0; i < data.length; i++) {
-        const prefix : string = (data[i].alias ? `${data[i].alias}.` : '');
-        const key = `${prefix}${data[i].key}`;
 
-        switch (data[i].value) {
-            case FieldOperator.INCLUDE:
-                query.addSelect(key);
-                break;
-            case FieldOperator.EXCLUDE:
-                // todo: not implemented yet :/
-                break;
-            default:
-                query.select(key);
-                break;
-        }
-    }
+    query.select(data.map((field) => {
+        const alias = getAliasForPath(options.relations, field.path) ||
+            options.defaultAlias ||
+            options.defaultPath;
+
+        return buildKeyWithPrefix(field.key, alias);
+    }));
 
     return data;
 }
@@ -47,12 +40,17 @@ export function applyQueryFieldsParseOutput<T>(
  * @param data
  * @param options
  */
-export function applyQueryFields<T>(
+export function applyQueryFields<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
     data: unknown,
-    options?: FieldsApplyOptions,
-) : FieldsApplyOutput {
-    return applyQueryFieldsParseOutput(query, parseQueryFields(data, options));
+    options?: QueryFieldsApplyOptions<T>,
+) : QueryFieldsApplyOutput {
+    options = options || {};
+    if (options.defaultAlias) {
+        options.defaultPath = options.defaultAlias;
+    }
+
+    return applyQueryFieldsParseOutput(query, parseQueryFields(data, options), options);
 }
 
 /**
@@ -62,10 +60,10 @@ export function applyQueryFields<T>(
  * @param data
  * @param options
  */
-export function applyFields<T>(
+export function applyFields<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
     data: unknown,
-    options?: FieldsApplyOptions,
-) : FieldsApplyOutput {
+    options?: QueryFieldsApplyOptions<T>,
+) : QueryFieldsApplyOutput {
     return applyQueryFields(query, data, options);
 }

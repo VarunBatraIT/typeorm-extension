@@ -1,41 +1,50 @@
-import {
-    FiltersParseOutput,
-    parseQueryFilters,
-} from '@trapi/query';
+import type { FiltersParseOutput } from 'rapiq';
+import { FilterComparisonOperator, parseQueryFilters } from 'rapiq';
 
-import { Brackets, SelectQueryBuilder } from 'typeorm';
-import {
-    FiltersApplyOptions, FiltersApplyOutput, FiltersTransformOptions, FiltersTransformOutput,
+import type { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
+import { Brackets } from 'typeorm';
+import { buildKeyWithPrefix, getAliasForPath } from '../../utils';
+import type {
+    QueryFiltersApplyOptions,
+    QueryFiltersApplyOutput,
+    QueryFiltersOutput,
 } from './type';
 
 // --------------------------------------------------
 
-export function transformParsedFilters(
+export function transformParsedFilters<T extends ObjectLiteral = ObjectLiteral>(
     data: FiltersParseOutput,
-    options?: FiltersTransformOptions,
-) : FiltersTransformOutput {
-    options ??= {};
+    options: QueryFiltersApplyOptions<T> = {},
+) : QueryFiltersOutput {
+    options = options || {};
 
-    const items : FiltersTransformOutput = [];
+    const items : QueryFiltersOutput = [];
 
     for (let i = 0; i < data.length; i++) {
-        const fullKey : string = (data[i].alias ? `${data[i].alias}.` : '') + data[i].key;
+        const alias = getAliasForPath(options.relations, data[i].path) ||
+            options.defaultAlias ||
+            options.defaultPath;
+
+        const fullKey : string = buildKeyWithPrefix(data[i].key, alias);
 
         const filter = data[i];
-        filter.operator ??= {};
 
         const statement : string[] = [
             fullKey,
         ];
 
-        if (
-            typeof filter.value === 'undefined' ||
-            filter.value === null ||
-            `${filter.value}`.toLowerCase() === 'null'
-        ) {
+        let bindingKey : string | undefined = typeof options.bindingKey === 'function' ?
+            options.bindingKey(fullKey) :
+            undefined;
+
+        if (typeof bindingKey === 'undefined') {
+            bindingKey = `filter_${fullKey.replace('.', '_')}`;
+        }
+
+        if (filter.value === null || typeof filter.value === 'undefined') {
             statement.push('IS');
 
-            if (filter.operator.negation) {
+            if (filter.operator === FilterComparisonOperator.NOT_EQUAL) {
                 statement.push('NOT');
             }
 
@@ -45,65 +54,93 @@ export function transformParsedFilters(
                 statement: statement.join(' '),
                 binding: {},
             });
-        } else if (
-            typeof filter.value === 'string' ||
-            typeof filter.value === 'number' ||
-            typeof filter.value === 'boolean' ||
-            Array.isArray(filter.value)
-        ) {
-            if (
-                (
-                    typeof filter.value === 'string' ||
-                    typeof filter.value === 'number'
-                ) &&
-                filter.operator.like
-            ) {
-                filter.value += '%';
-            }
 
-            if (filter.operator.in || filter.operator.like) {
-                if (filter.operator.negation) {
+            continue;
+        }
+
+        switch (filter.operator) {
+            case FilterComparisonOperator.EQUAL:
+            case FilterComparisonOperator.NOT_EQUAL: {
+                if (filter.operator === FilterComparisonOperator.EQUAL) {
+                    statement.push('=');
+                } else {
+                    statement.push('!=');
+                }
+
+                statement.push(`:${bindingKey}`);
+                break;
+            }
+            case FilterComparisonOperator.LIKE:
+            case FilterComparisonOperator.NOT_LIKE: {
+                if (filter.operator === FilterComparisonOperator.NOT_LIKE) {
                     statement.push('NOT');
                 }
 
-                if (filter.operator.like) {
-                    statement.push('LIKE');
-                } else if (filter.operator.in) {
-                    statement.push('IN');
-                }
-            } else if (filter.operator.negation) {
-                statement.push('!=');
-            } else if (filter.operator.lessThan) {
-                statement.push('<');
-            } else if (filter.operator.lessThanEqual) {
-                statement.push('<=');
-            } else if (filter.operator.moreThan) {
-                statement.push('>');
-            } else if (filter.operator.moreThanEqual) {
-                statement.push('>=');
-            } else {
-                statement.push('=');
-            }
+                statement.push('LIKE');
 
-            let bindingKey : string | undefined = typeof options.bindingKeyFn === 'function' ?
-                options.bindingKeyFn(fullKey) :
-                undefined;
-
-            if (typeof bindingKey === 'undefined') {
-                bindingKey = `filter_${fullKey.replace('.', '_')}`;
-            }
-
-            if (filter.operator.in) {
-                statement.push(`(:...${bindingKey})`);
-            } else {
                 statement.push(`:${bindingKey}`);
+
+                filter.value += '%';
+                break;
             }
 
-            items.push({
-                statement: statement.join(' '),
-                binding: { [bindingKey]: filter.value },
-            });
+            case FilterComparisonOperator.IN:
+            case FilterComparisonOperator.NOT_IN: {
+                if (filter.operator === FilterComparisonOperator.NOT_IN) {
+                    statement.push('NOT');
+                }
+
+                statement.push('IN');
+
+                statement.push(`(:...${bindingKey})`);
+
+                if (Array.isArray(filter.value)) {
+                    const nullIndex = (filter.value as unknown[]).indexOf(null);
+                    if (nullIndex !== -1) {
+                        filter.value.splice(nullIndex, 1);
+
+                        statement.unshift('(');
+                        if (filter.operator === FilterComparisonOperator.NOT_IN) {
+                            statement.push('AND');
+                        } else {
+                            statement.push('OR');
+                        }
+                        statement.push(fullKey);
+                        statement.push('IS');
+
+                        if (filter.operator === FilterComparisonOperator.NOT_IN) {
+                            statement.push('NOT');
+                        }
+
+                        statement.push('NULL');
+                        statement.push(')');
+                    }
+                }
+                break;
+            }
+            case FilterComparisonOperator.LESS_THAN:
+            case FilterComparisonOperator.LESS_THAN_EQUAL:
+            case FilterComparisonOperator.GREATER_THAN:
+            case FilterComparisonOperator.GREATER_THAN_EQUAL: {
+                if (filter.operator === FilterComparisonOperator.LESS_THAN) {
+                    statement.push('<');
+                } else if (filter.operator === FilterComparisonOperator.LESS_THAN_EQUAL) {
+                    statement.push('<=');
+                } else if (filter.operator === FilterComparisonOperator.GREATER_THAN) {
+                    statement.push('>');
+                } else {
+                    statement.push('>=');
+                }
+
+                statement.push(`:${bindingKey}`);
+                break;
+            }
         }
+
+        items.push({
+            statement: statement.join(' '),
+            binding: { [bindingKey]: filter.value },
+        });
     }
 
     return items;
@@ -115,10 +152,10 @@ export function transformParsedFilters(
  * @param query
  * @param data
  */
-export function applyFiltersTransformed<T>(
+export function applyFiltersTransformed<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
-    data: FiltersTransformOutput,
-) : FiltersTransformOutput {
+    data: QueryFiltersOutput,
+) : QueryFiltersOutput {
     if (data.length === 0) {
         return data;
     }
@@ -144,12 +181,12 @@ export function applyFiltersTransformed<T>(
  * @param data
  * @param options
  */
-export function applyQueryFiltersParseOutput<T>(
+export function applyQueryFiltersParseOutput<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
     data: FiltersParseOutput,
-    options?: FiltersTransformOptions,
-) : FiltersApplyOutput {
-    applyFiltersTransformed(query, transformParsedFilters(data, options));
+    options?: QueryFiltersApplyOptions<T>,
+) : QueryFiltersApplyOutput {
+    applyFiltersTransformed(query, transformParsedFilters<T>(data, options));
 
     return data;
 }
@@ -163,19 +200,20 @@ export function applyQueryFiltersParseOutput<T>(
  * @param data
  * @param options
  */
-export function applyQueryFilters(
-    query: SelectQueryBuilder<any> | undefined,
+export function applyQueryFilters<T extends ObjectLiteral = ObjectLiteral>(
+    query: SelectQueryBuilder<T>,
     data: unknown,
-    options?: FiltersApplyOptions,
-) : FiltersApplyOutput {
-    options ??= {};
-
-    const { transform: transformOptions, ...parseOptions } = options;
+    options?: QueryFiltersApplyOptions<T>,
+) : QueryFiltersApplyOutput {
+    options = options || {};
+    if (options.defaultAlias) {
+        options.defaultPath = options.defaultAlias;
+    }
 
     return applyQueryFiltersParseOutput(
         query,
-        parseQueryFilters(data, parseOptions),
-        transformOptions,
+        parseQueryFilters(data, options),
+        options,
     );
 }
 
@@ -186,10 +224,10 @@ export function applyQueryFilters(
  * @param data
  * @param options
  */
-export function applyFilters(
-    query: SelectQueryBuilder<any> | undefined,
+export function applyFilters<T extends ObjectLiteral = ObjectLiteral>(
+    query: SelectQueryBuilder<T>,
     data: unknown,
-    options?: FiltersApplyOptions,
-) : FiltersApplyOutput {
+    options?: QueryFiltersApplyOptions<T>,
+) : QueryFiltersApplyOutput {
     return applyQueryFilters(query, data, options);
 }

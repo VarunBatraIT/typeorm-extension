@@ -1,8 +1,11 @@
-import { Arguments, Argv, CommandModule } from 'yargs';
+import type { Arguments, Argv, CommandModule } from 'yargs';
 import { buildDataSourceOptions } from '../../../data-source';
+import type { DatabaseDropContext } from '../../../database';
 import { dropDatabase } from '../../../database';
+import { CodeTransformation, setCodeTransformation } from '../../../utils';
 
 export interface DatabaseDropArguments extends Arguments {
+    codeTransformation: string,
     root: string;
     connection: 'default' | string;
     config: 'ormconfig' | string;
@@ -16,6 +19,11 @@ export class DatabaseDropCommand implements CommandModule {
 
     builder(args: Argv) {
         return args
+            .option('codeTransformation', {
+                default: CodeTransformation.NONE,
+                choices: [CodeTransformation.NONE, CodeTransformation.JUST_IN_TIME],
+                describe: 'This option specifies how the code is transformed and how the library should behave as a result.',
+            })
             .option('root', {
                 alias: 'r',
                 default: process.cwd(),
@@ -37,11 +45,18 @@ export class DatabaseDropCommand implements CommandModule {
                 alias: 'd',
                 default: 'data-source',
                 describe: 'Name of the file with the data-source.',
+            })
+            .option('initialDatabase', {
+                describe: 'Specify the initial database to connect to.',
             });
     }
 
     async handler(raw: Arguments, exitProcess = true) {
         const args : DatabaseDropArguments = raw as DatabaseDropArguments;
+
+        if (args.codeTransformation) {
+            setCodeTransformation(args.codeTransformation);
+        }
 
         const dataSourceOptions = await buildDataSourceOptions({
             name: args.connection,
@@ -50,10 +65,19 @@ export class DatabaseDropCommand implements CommandModule {
             dataSourceName: args.dataSource,
         });
 
-        await dropDatabase({
+        const context : DatabaseDropContext = {
             ifExist: true,
             options: dataSourceOptions,
-        });
+        };
+
+        if (
+            typeof args.initialDatabase === 'string' &&
+            args.initialDatabase !== ''
+        ) {
+            context.initialDatabase = args.initialDatabase;
+        }
+
+        await dropDatabase(context);
 
         if (exitProcess) {
             process.exit(0);

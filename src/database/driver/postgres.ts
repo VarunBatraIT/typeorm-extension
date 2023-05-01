@@ -1,15 +1,17 @@
-import { PostgresDriver } from 'typeorm/driver/postgres/PostgresDriver';
-import { CockroachDriver } from 'typeorm/driver/cockroachdb/CockroachDriver';
-import { DatabaseCreateContext, DatabaseDropContext } from '../type';
+import { isObject } from 'locter';
+import type { PostgresDriver } from 'typeorm/driver/postgres/PostgresDriver';
+import type { CockroachDriver } from 'typeorm/driver/cockroachdb/CockroachDriver';
+import { OptionsError } from '../../errors';
+import type { DatabaseBaseContext, DatabaseCreateContext, DatabaseDropContext } from '../type';
 import { hasOwnProperty } from '../../utils';
-import { DriverOptions } from './type';
+import type { DriverOptions } from './type';
 import { buildDriverOptions, createDriver } from './utils';
-import { buildDatabaseCreateContext, buildDatabaseDropContext, synchronizeDatabase } from '../utils';
+import { buildDatabaseCreateContext, buildDatabaseDropContext, setupDatabaseSchema } from '../utils';
 
 export async function createSimplePostgresConnection(
     driver: PostgresDriver | CockroachDriver,
     options: DriverOptions,
-    operationContext: DatabaseCreateContext,
+    operationContext: DatabaseBaseContext,
 ) {
     /**
      * pg library
@@ -55,7 +57,10 @@ export async function executeSimplePostgresQuery(connection: any, query: string,
 export async function createPostgresDatabase(
     context?: DatabaseCreateContext,
 ) {
-    context = await buildDatabaseDropContext(context);
+    context = await buildDatabaseCreateContext(context);
+    if (!context.options) {
+        throw OptionsError.undeterminable();
+    }
 
     const options = buildDriverOptions(context.options);
     const driver = createDriver(context.options) as PostgresDriver;
@@ -67,7 +72,7 @@ export async function createPostgresDatabase(
         const existResult = await executeSimplePostgresQuery(connection, existQuery, false);
 
         if (
-            typeof existResult === 'object' &&
+            isObject(existResult) &&
             hasOwnProperty(existResult, 'rows') &&
             Array.isArray(existResult.rows) &&
             existResult.rows.length > 0
@@ -89,7 +94,7 @@ export async function createPostgresDatabase(
     const result = await executeSimplePostgresQuery(connection, query);
 
     if (context.synchronize) {
-        await synchronizeDatabase(context.options);
+        await setupDatabaseSchema(context.options);
     }
 
     return result;
@@ -98,7 +103,10 @@ export async function createPostgresDatabase(
 export async function dropPostgresDatabase(
     context?: DatabaseDropContext,
 ) {
-    context = await buildDatabaseCreateContext(context);
+    context = await buildDatabaseDropContext(context);
+    if (!context.options) {
+        throw OptionsError.undeterminable();
+    }
 
     const options = buildDriverOptions(context.options);
     const driver = createDriver(context.options) as PostgresDriver;

@@ -1,8 +1,9 @@
-import { SqlServerDriver } from 'typeorm/driver/sqlserver/SqlServerDriver';
-import { DatabaseCreateContext, DatabaseDropContext } from '../type';
-import { DriverOptions } from './type';
+import type { SqlServerDriver } from 'typeorm/driver/sqlserver/SqlServerDriver';
+import { OptionsError } from '../../errors';
+import type { DatabaseCreateContext, DatabaseDropContext } from '../type';
+import type { DriverOptions } from './type';
 import { buildDriverOptions, createDriver } from './utils';
-import { buildDatabaseCreateContext, buildDatabaseDropContext, synchronizeDatabase } from '../utils';
+import { buildDatabaseCreateContext, buildDatabaseDropContext, setupDatabaseSchema } from '../utils';
 
 export async function createSimpleMsSQLConnection(
     driver: SqlServerDriver,
@@ -26,6 +27,9 @@ export async function createMsSQLDatabase(
     context?: DatabaseCreateContext,
 ) {
     context = await buildDatabaseCreateContext(context);
+    if (!context.options) {
+        throw OptionsError.undeterminable();
+    }
 
     const options = buildDriverOptions(context.options);
     const driver = createDriver(context.options) as SqlServerDriver;
@@ -45,7 +49,7 @@ export async function createMsSQLDatabase(
     const result = await connection.query(query);
 
     if (context.synchronize) {
-        await synchronizeDatabase(context.options);
+        await setupDatabaseSchema(context.options);
     }
 
     return result;
@@ -55,6 +59,9 @@ export async function dropMsSQLDatabase(
     context?: DatabaseDropContext,
 ) {
     context = await buildDatabaseDropContext(context);
+    if (!context.options) {
+        throw OptionsError.undeterminable();
+    }
 
     const options = buildDriverOptions(context.options);
     const driver = createDriver(context.options) as SqlServerDriver;

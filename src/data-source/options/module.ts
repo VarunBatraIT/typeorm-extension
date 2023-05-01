@@ -1,8 +1,12 @@
-import { ConnectionOptionsReader, DataSourceOptions } from 'typeorm';
-import { DataSourceOptionsBuildContext } from './type';
+import type { DataSourceOptions } from 'typeorm';
+import { ConnectionOptionsReader } from 'typeorm';
+import type { DataSourceOptionsBuildContext } from './type';
 import { setDefaultSeederOptions } from '../../seeder';
-import { modifyDataSourceOptionsForRuntimeEnvironment } from './utils';
-import { readTsConfig } from '../../utils/tsconfig';
+import {
+    adjustFilePathsForDataSourceOptions,
+    mergeDataSourceOptionsWithEnv,
+    readDataSourceOptionsFromEnv,
+} from './utils';
 import { findDataSource } from '../find';
 
 export async function extendDataSourceOptions(
@@ -11,12 +15,7 @@ export async function extendDataSourceOptions(
 ) : Promise<DataSourceOptions> {
     options = setDefaultSeederOptions(options);
 
-    let { compilerOptions } = await readTsConfig(tsConfigDirectory || process.cwd());
-    compilerOptions = compilerOptions || {};
-
-    modifyDataSourceOptionsForRuntimeEnvironment(options, {
-        dist: compilerOptions.outDir,
-    });
+    await adjustFilePathsForDataSourceOptions(options, { root: tsConfigDirectory });
 
     return options;
 }
@@ -62,10 +61,23 @@ export async function buildDataSourceOptions(
     });
 
     if (dataSource) {
-        return extendDataSourceOptions(
+        const options = await extendDataSourceOptions(
             dataSource.options,
             tsconfigDirectory,
         );
+
+        if (context.experimental) {
+            return mergeDataSourceOptionsWithEnv(options);
+        }
+
+        return options;
+    }
+
+    if (context.experimental) {
+        const options = readDataSourceOptionsFromEnv();
+        if (options) {
+            return extendDataSourceOptions(options);
+        }
     }
 
     return buildLegacyDataSourceOptions(context);

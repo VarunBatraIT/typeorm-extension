@@ -1,9 +1,14 @@
-import { DataSource, DataSourceOptions } from 'typeorm';
-import { loadScriptFile, loadScriptFileExport } from 'locter';
-import { SeederConstructor, SeederOptions } from './type';
+import type { DataSource, DataSourceOptions } from 'typeorm';
+import { getModuleExport, load } from 'locter';
+import { hasOwnProperty } from '../utils';
+import type { SeederConstructor, SeederOptions } from './type';
 import { resolveFilePaths, resolveFilePatterns, setDefaultSeederOptions } from './utils';
-import { modifyDataSourceOptionForRuntimeEnvironment, setDataSource } from '../data-source';
-import { SeederFactoryConfig, useSeederFactoryManager } from './factory';
+import {
+    adjustFilePathsForDataSourceOptions,
+    setDataSource,
+} from '../data-source';
+import type { SeederFactoryConfig } from './factory';
+import { useSeederFactoryManager } from './factory';
 
 async function prepareSeeder(
     options?: SeederOptions,
@@ -11,8 +16,9 @@ async function prepareSeeder(
     options = options ?? {};
 
     options = setDefaultSeederOptions(options);
-    options = modifyDataSourceOptionForRuntimeEnvironment(options, 'seeds');
-    options = modifyDataSourceOptionForRuntimeEnvironment(options, 'factories');
+    await adjustFilePathsForDataSourceOptions(options, {
+        keys: ['seeds', 'factories'],
+    });
 
     if (options.factories) {
         let factoryFiles : string[] = [];
@@ -32,7 +38,7 @@ async function prepareSeeder(
             factoryFiles = resolveFilePaths(factoryFiles);
 
             for (let i = 0; i < factoryFiles.length; i++) {
-                await loadScriptFile(factoryFiles[i]);
+                await load(factoryFiles[i]);
             }
         }
 
@@ -68,9 +74,11 @@ async function prepareSeeder(
             seedFiles = resolveFilePaths(seedFiles);
 
             for (let i = 0; i < seedFiles.length; i++) {
-                const fileExport = await loadScriptFileExport(seedFiles[i]);
-                if (fileExport) {
-                    const item = fileExport.value as SeederConstructor;
+                const moduleExports = await load(seedFiles[i]);
+                const moduleDefault = getModuleExport(moduleExports);
+
+                if (moduleDefault.value) {
+                    const item = moduleDefault.value as SeederConstructor;
 
                     if (!options.seedName || options.seedName === item.name) {
                         items.push(item);
@@ -95,7 +103,11 @@ export async function runSeeder(
     dataSource: DataSource,
     seeder: SeederConstructor,
     options?: SeederOptions,
-) : Promise<void> {
+) : Promise<unknown> {
+    if (hasOwnProperty(seeder, 'default')) {
+        seeder = seeder.default as SeederConstructor;
+    }
+
     options = options || {};
     options.seeds = [seeder];
     options.factoriesLoad = options.factoriesLoad ?? true;
@@ -119,13 +131,13 @@ export async function runSeeder(
     const clazz = new seeder();
 
     const factoryManager = useSeederFactoryManager();
-    await clazz.run(dataSource, factoryManager);
+    return clazz.run(dataSource, factoryManager);
 }
 
 export async function runSeeders(
     dataSource: DataSource,
     options?: SeederOptions,
-) : Promise<void> {
+) : Promise<unknown[]> {
     options = options || {};
 
     const { seeds, factories } = dataSource.options as DataSourceOptions & SeederOptions;
@@ -145,10 +157,24 @@ export async function runSeeders(
     }
 
     const items = await prepareSeeder(options);
+    const promises : Promise<unknown>[] = [];
+    const results : unknown[] = [];
 
     for (let i = 0; i < items.length; i++) {
-        await runSeeder(dataSource, items[i], {
+        const promise = runSeeder(dataSource, items[i], {
             factoriesLoad: false,
         });
+
+        if (options.parallelExecution) {
+            promises.push(promise);
+        } else {
+            await promise;
+        }
     }
+
+    if (promises.length > 0) {
+        return Promise.all(promises);
+    }
+
+    return results;
 }

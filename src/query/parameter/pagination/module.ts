@@ -1,6 +1,7 @@
-import { parseQueryPagination } from '@trapi/query';
-import { SelectQueryBuilder } from 'typeorm';
-import { PaginationApplyOptions, PaginationApplyOutput } from './type';
+import type { ObjectLiteral } from 'rapiq';
+import { parseQueryPagination } from 'rapiq';
+import type { SelectQueryBuilder } from 'typeorm';
+import type { QueryPaginationApplyOptions, QueryPaginationApplyOutput } from './type';
 
 /**
  * Apply parsed page/pagination parameter data on the db query.
@@ -8,9 +9,9 @@ import { PaginationApplyOptions, PaginationApplyOutput } from './type';
  * @param query
  * @param data
  */
-export function applyQueryPaginationParseOutput<T>(
+export function applyQueryPaginationParseOutput<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
-    data: PaginationApplyOutput,
+    data: QueryPaginationApplyOutput,
 ) {
     /* istanbul ignore next */
     if (typeof data.limit !== 'undefined') {
@@ -36,11 +37,11 @@ export function applyQueryPaginationParseOutput<T>(
  * @param data
  * @param options
  */
-export function applyQueryPagination<T>(
+export function applyQueryPagination<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
     data: unknown,
-    options?: PaginationApplyOptions,
-) : PaginationApplyOutput {
+    options?: QueryPaginationApplyOptions,
+) : QueryPaginationApplyOutput {
     return applyQueryPaginationParseOutput(query, parseQueryPagination(data, options));
 }
 
@@ -51,10 +52,10 @@ export function applyQueryPagination<T>(
  * @param data
  * @param options
  */
-export function applyPagination<T>(
+export function applyPagination<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
     data: unknown,
-    options?: PaginationApplyOptions,
-) : PaginationApplyOutput {
+    options?: QueryPaginationApplyOptions,
+) : QueryPaginationApplyOutput {
     return applyQueryPagination(query, data, options);
 }

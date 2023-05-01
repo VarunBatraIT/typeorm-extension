@@ -1,6 +1,8 @@
-import { SortDirection, SortParseOutput, parseQuerySort } from '@trapi/query';
-import { SelectQueryBuilder } from 'typeorm';
-import { SortApplyOptions, SortApplyOutput } from './type';
+import type { SortDirection, SortParseOutput } from 'rapiq';
+import { parseQuerySort } from 'rapiq';
+import type { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
+import { buildKeyWithPrefix } from '../../utils';
+import type { QuerySortApplyOptions, QuerySortApplyOutput } from './type';
 
 // --------------------------------------------------
 
@@ -10,19 +12,18 @@ import { SortApplyOptions, SortApplyOutput } from './type';
  * @param query
  * @param data
  */
-export function applyQuerySortParseOutput<T>(
+export function applyQuerySortParseOutput<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
     data: SortParseOutput,
-) : SortApplyOutput {
+) : QuerySortApplyOutput {
     if (data.length === 0) {
         return data;
     }
 
-    const sort : Record<string, SortDirection> = {};
+    const sort : Record<string, `${SortDirection}`> = {};
 
     for (let i = 0; i < data.length; i++) {
-        const prefix : string = data[i].alias ? `${data[i].alias}.` : '';
-        const key = `${prefix}${data[i].key}`;
+        const key = buildKeyWithPrefix(data[i].key, data[i].path);
 
         sort[key] = data[i].value;
     }
@@ -39,11 +40,16 @@ export function applyQuerySortParseOutput<T>(
  * @param data
  * @param options
  */
-export function applyQuerySort<T>(
+export function applyQuerySort<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
     data: unknown,
-    options?: SortApplyOptions,
+    options?: QuerySortApplyOptions<T>,
 ) : SortParseOutput {
+    options = options || {};
+    if (options.defaultAlias) {
+        options.defaultPath = options.defaultAlias;
+    }
+
     return applyQuerySortParseOutput(query, parseQuerySort(data, options));
 }
 
@@ -54,10 +60,10 @@ export function applyQuerySort<T>(
  * @param data
  * @param options
  */
-export function applySort<T>(
+export function applySort<T extends ObjectLiteral = ObjectLiteral>(
     query: SelectQueryBuilder<T>,
     data: unknown,
-    options?: SortApplyOptions,
+    options?: QuerySortApplyOptions<T>,
 ) : SortParseOutput {
-    return applyQuerySortParseOutput(query, parseQuerySort(data, options));
+    return applyQuerySort(query, data, options);
 }
